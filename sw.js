@@ -1,6 +1,6 @@
 // The service worker: the game (one big page), its icons and three.js stay on the phone after the first start, so it opens quickly
 // and plays without a connection. build-android.ps1 changes VERSION with every build; a phone then fetches the new game once.
-const VERSION = 'fa-20261030163209';
+const VERSION = 'fa-20261030171500';
 const FILES = [
   './', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png',
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
