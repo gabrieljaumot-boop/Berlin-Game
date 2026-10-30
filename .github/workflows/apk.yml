@@ -1,0 +1,79 @@
+# Builds the Android app (berlin-game.apk) from the game files and publishes it as the latest GitHub release,
+# so the download page can always link to .../releases/latest/download/berlin-game.apk
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['index.html', 'icon-*.png', 'android/**', '.github/workflows/apk.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick Android SDK tools
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)
+          PLAT=$(ls -d "$ANDROID_HOME"/platforms/android-*/ | sort -V | tail -1)
+          echo "BT=$BT" >> "$GITHUB_ENV"
+          echo "ANDROID_JAR=${PLAT}android.jar" >> "$GITHUB_ENV"
+          echo "build-tools: $BT  platform: $PLAT"
+
+      - name: Gather assets (game + three.js for offline play)
+        run: |
+          set -e
+          mkdir -p build/assets/www build/assets/lib build/res/mipmap-xxxhdpi build/res/mipmap-xxhdpi
+          cp index.html icon-192.png icon-512.png manifest.webmanifest build/assets/www/
+          grep -oE 'https://(cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)/[^"]+\.js' index.html | sort -u | while read -r u; do
+            curl -fsSL --retry 3 "$u" -o "build/assets/lib/$(basename "$u")"
+          done
+          ls -la build/assets/lib
+          cp icon-192.png build/res/mipmap-xxhdpi/ic_launcher.png
+          cp icon-512.png build/res/mipmap-xxxhdpi/ic_launcher.png
+
+      - name: Compile and package
+        run: |
+          set -e
+          cd build
+          "$BT/aapt2" compile --dir res -o res.zip
+          "$BT/aapt2" link -I "$ANDROID_JAR" --manifest ../android/AndroidManifest.xml -A assets \
+            --min-sdk-version 24 --target-sdk-version 34 \
+            --version-code ${{ github.run_number }} --version-name "1.${{ github.run_number }}" \
+            --java gen -o base.apk res.zip
+          mkdir -p classes dex
+          javac -source 1.8 -target 1.8 -bootclasspath "$ANDROID_JAR" -classpath "$ANDROID_JAR" -d classes \
+            gen/cat/berlingame/R.java ../android/src/cat/berlingame/MainActivity.java
+          "$BT/d8" --release --lib "$ANDROID_JAR" --min-api 24 --output dex $(find classes -name '*.class')
+          cp base.apk unsigned.apk
+          (cd dex && zip -q ../unsigned.apk classes.dex)
+          "$BT/zipalign" -f -p 4 unsigned.apk aligned.apk
+
+      - name: Sign
+        run: |
+          set -e
+          cd build
+          PW=$(openssl rand -hex 16)
+          keytool -genkeypair -keystore key.jks -storepass "$PW" -keypass "$PW" -alias app \
+            -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Berlin Game" -noprompt
+          "$BT/apksigner" sign --ks key.jks --ks-pass "pass:$PW" --out berlin-game.apk aligned.apk
+          "$BT/apksigner" verify --print-certs berlin-game.apk | head -3
+          rm key.jks
+          ls -la berlin-game.apk
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v1.${{ github.run_number }}" build/berlin-game.apk \
+            --title "Frankfurter Allee 1.${{ github.run_number }}" \
+            --notes "Android app. Download berlin-game.apk on your phone and open it to install." --latest
