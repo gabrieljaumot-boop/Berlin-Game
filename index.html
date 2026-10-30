@@ -15162,6 +15162,6 @@ window.__fa = {
   simulate: sec => { for (let t = 0; t < sec; t += 0.05) step(0.05, 0.05); }, stats: () => ({ houses: HOUSES.length, shops: SHOPS.length, signs: signCount, trees: TREES.length, parked: parkSlots.length, edges: GEDGES.length, walks: WALKS.length, sig: SIG_GROUPS.length, heads: SIG_HEADS.length, trams: TRAMS.length, trains: TRAINS.length, tris: renderer.info.render.triangles, calls: renderer.info.render.calls }) };
 })();
 </script>
-<script>if ("serviceWorker" in navigator) addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));</script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js", { scope: "./" }).catch(() => {});</script>
 </body>
 </html>
