@@ -1,0 +1,16 @@
+{
+  "name": "Mini GTA: Frankfurter Allee",
+  "short_name": "Frankfurter Allee",
+  "description": "Friedrichshain and Lichtenberg in 3D: drive, fly, fight the invasion.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#111111",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
