@@ -6267,7 +6267,7 @@ function initAudio() {
   if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
   try {
     ac = new (window.AudioContext || window.webkitAudioContext)();
-    master = ac.createGain(); master.gain.value = 0.8; master.connect(ac.destination);
+    master = ac.createGain(); master.gain.value = 1.1; const comp = ac.createDynamicsCompressor(); comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 6; master.connect(comp); comp.connect(ac.destination);
     noiseBuf = ac.createBuffer(1, ac.sampleRate * 1.5, ac.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = R() * 2 - 1;
     engOsc = ac.createOscillator(); engOsc.type = 'sawtooth';
@@ -10701,6 +10701,7 @@ function launchRocket(from, d, big) {
   puff(from.x, from.y, from.z, 0, 0, 0, 0.08, big ? 2.2 : 1.1, '#ffd36b', 0, true);
 }
 function vehicleFire(c) {
+  if (c.kind === 'heli' && c.hw) { heliDrop(c, c.hw === 2); return; }
   if (c.kind === 'tank') {
     player.shootT = 1.0; c.recoil = 1;
     c.m.g.updateMatrixWorld(true);
@@ -11172,7 +11173,8 @@ function selectWeapon(i) {
   beep('square', 520, 760, 0.05, 0.04);
 }
 function weaponHud() {
-  if (player.car && player.car.kind) return (player.car.kind === 'tank' ? 'TANK GUN' : 'HELI ROCKETS') + '  ∞';
+  if (player.car && player.car.kind === 'heli') { const hw = player.car.hw || 0; return 'HELI ' + HELI_W[hw].name + '  ∞ <span class="slots">' + HELI_W.map((x, i) => '<i' + (i === hw ? ' class="on"' : '') + '>' + (i + 1) + '</i>').join('') + '</span>'; }
+  if (player.car && player.car.kind) return 'TANK GUN  ∞';
   const w = WEAPONS[player.weapon];
   return w.name + '  ' + (player.mags[w.id] === Infinity ? '∞' : player.mags[w.id]) + ' <span class="slots">' + WEAPONS.map((x, i) => '<i' + (i === player.weapon ? ' class="on"' : '') + '>' + (i + 1) + '</i>').join('') + '</span>' + ' <span class="slots" style="opacity:.75"><i>B</i> ' + BUILD_KINDS[buildKind] + ' (' + built.length + ')</span>';
 }
@@ -14412,7 +14414,7 @@ function updateHud(dt) {
     else { HUD_LAST.pt = time; HUD_LAST.px = player.x; HUD_LAST.pz = player.z; HUD_LAST.promptEarly = false;
     const tn = talkNear(), dn = tn ? null : doorNear(), bn = tn || dn ? null : bellNear(); if (tn || dn || bn) { help(tn ? 'Press <kbd>E</kbd> to talk to <b>' + tn.name + '</b>' : dn ? dn.text : DANIEL && bn === DANIEL.door ? 'Press <kbd>E</kbd> to ring at <b>Daniel</b>\'s' : 'Press <kbd>E</kbd> to ring the doorbell'); HUD_LAST.promptEarly = true; drawMinimap(); return; } const c = nearestCar(2.2) || (parkedNear(player.x, player.z, 3.4).some(s => dist(s.x, s.z, player.x, player.z) < 3.4) ? true : null); const rn = !c && !player.ride && rentalNear(1.8); help(player.ride ? (Math.abs(player.ride.v) < 4 ? 'Press <kbd>E</kbd> to get off &nbsp; <kbd>Shift</kbd> faster' : '') : c ? 'Press <kbd>E</kbd> to get in' : rn ? 'Press <kbd>E</kbd> to ride the <b>' + rn.brand + '</b> ' + (rn.kind === 'bike' ? 'bike' : 'e-scooter') : ''); }
   }
-  else if (player.car.kind === 'heli') help(player.car.alt - (player.car.floor || 0) < 0.6 && Math.hypot(player.car.vx, player.car.vz) < 3 ? '<kbd>Space</kbd> take off &nbsp; <kbd>E</kbd> get out' : '<kbd>Space</kbd> up <kbd>Shift</kbd> down &nbsp; <kbd>W</kbd><kbd>S</kbd> fly <kbd>A</kbd><kbd>D</kbd> turn &nbsp; click / <kbd>F</kbd> rockets');
+  else if (player.car.kind === 'heli') help(player.car.alt - (player.car.floor || 0) < 0.6 && Math.hypot(player.car.vx, player.car.vz) < 3 ? '<kbd>Space</kbd> take off &nbsp; <kbd>E</kbd> get out' : '<kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> rockets / mega bomb / mini nuke &nbsp; <kbd>Space</kbd> up <kbd>Shift</kbd> down &nbsp; <kbd>W</kbd><kbd>S</kbd> fly <kbd>A</kbd><kbd>D</kbd> turn &nbsp; click / <kbd>F</kbd> rockets');
   else if (player.car.kind === 'tank') help(Math.hypot(player.car.vx, player.car.vz) < 6 ? 'Mouse aims the turret, click / <kbd>F</kbd> fires &nbsp; <kbd>E</kbd> get out' : '');
   else help(Math.hypot(player.car.vx, player.car.vz) < 6 ? 'Press <kbd>E</kbd> to get out &nbsp; <kbd>H</kbd> horn' : '');
   drawMinimap();
@@ -14758,6 +14760,15 @@ const MISSIONS = [];
       { text: 'Get a car: walk up to one and press E', check: () => !!player.car },
       ...cps.map((p, i) => ({ text: i < cps.length - 1 ? 'Checkpoint ' + (i + 1) + ' of ' + cps.length : 'Finish: Frankfurter Allee / Möllendorffstraße', at: () => ({ ...p, r: 9 }), time: i ? 0 : 115, keep: i > 0, check: () => !!player.car && near(p, 11), done: () => beep('sine', 990, 990, 0.12, 0.08) })),
     ] });
+  // 8 ---------- riot night: the whole city in flames ----------
+  const riotStart = walkSpot(-760, -400), riotEnd = roadSpot(-235, 885);
+  add({ id: 'riots', title: 'Riot night', where: 'Frankfurter Allee', reward: 800, start: riotStart,
+    intro: 'Riots have broken out on every street: barricades burning, houses set alight, fights with the riot police everywhere. Survive the night, then get out to Ostkreuz.',
+    setup: () => { riotsOn(true); addHeat(60); },
+    steps: [
+      { text: () => 'Survive the riots: ' + Math.max(0, Math.ceil(150 - MISSION.stepT)) + ' s', check: () => MISSION.stepT >= 150 },
+      { text: 'Get out of the chaos: reach S Ostkreuz alive', at: () => ({ ...riotEnd, r: 10 }), time: 200, check: () => near(riotEnd, 12), done: () => talk('Made it. Behind you the city is still burning.', 3) },
+    ] });
 })();
 // ---------- the markers, the objective line and the menu ----------
 const MISSION_UI = (function missionUi() {
@@ -14807,6 +14818,7 @@ function nextMissionStep() {
   setWaypoint(at ? { x: at.x, z: at.z, mission: true } : null);
 }
 function endMission() {
+  if (RIOTS.on) riotsOn(false);
   MISSION.cur = null; MISSION_UI.ring.visible = false; MISSION_UI.el.style.display = 'none';
   if (job && job.mission) setWaypoint(null);
   MISSION.cool = 4;
@@ -14889,7 +14901,7 @@ const TOUCH = { on: false, stick: null, look: null, el: {}, ctx: '' };
 const TOUCH_CONTROLS = [
   ['Move', [['Left thumb', 'drag anywhere on the left: walk, drive, fly'], ['All the way', 'on foot: sprint']]],
   ['Look', [['Right thumb', 'drag on the right side to look around and aim']]],
-  ['Buttons', [['FIRE', 'hold to shoot / throw / fire rockets'], ['E', 'get in or out, doors, shops, talk'], ['GUN', 'next weapon'], ['BRAKE · HORN', 'in a car'], ['▲ ▼', 'helicopter up / down']]],
+  ['Buttons', [['FIRE', 'hold to shoot / throw / fire rockets'], ['E', 'get in or out, doors, shops, talk'], ['GUN', 'next weapon (helicopter: rockets, mega bomb, mini nuke)'], ['BRAKE · HORN', 'in a car'], ['▲ ▼', 'helicopter up / down']]],
   ['Top row', [['MAP', 'map + GPS (tap the map to set a waypoint)'], ['JOBS', 'missions'], ['TANK · HELI', 'call a tank or a helicopter'], ['RUS', 'the Russian invasion on / off'], ['BARR', 'build a barricade (BARR+ = next kind)'], ['?', 'this list'], ['II', 'pause: graphics, sound, all controls']]],
 ];
 (function touchSetup() {
@@ -14981,7 +14993,7 @@ const TOUCH_CONTROLS = [
   const R_ = 'max(14px, env(safe-area-inset-right))';
   E.fire = btn('FIRE', 'calc(' + R_ + ' + 62px)', '22px', 86, () => { if (state === 'play') mouse.down = true; }, () => { mouse.down = false; });
   E.use = btn('E', 'calc(' + R_ + ' + 160px)', '34px', 60, () => press('KeyE', 'e'));
-  E.gun = btn('GUN', 'calc(' + R_ + ' + 76px)', '122px', 54, () => { if (state === 'play' && !player.car && !INTERIOR.active) selectWeapon((player.weapon + 1) % WEAPONS.length); });
+  E.gun = btn('GUN', 'calc(' + R_ + ' + 76px)', '122px', 54, () => { if (state === 'play' && player.car && player.car.kind === 'heli') heliSelect(player.car, (player.car.hw || 0) + 1); else if (state === 'play' && !player.car && !INTERIOR.active) selectWeapon((player.weapon + 1) % WEAPONS.length); });
   const hold = (code) => [() => { keys[code] = true; if (code === 'ShiftLeft') TOUCH.downHeld = true; }, () => { keys[code] = false; if (code === 'ShiftLeft') TOUCH.downHeld = false; }];
   E.brake = btn('BRAKE', 'calc(' + R_ + ' + 160px)', '108px', 58, ...hold('Space'));
   E.horn = btn('HORN', 'calc(' + R_ + ' + 22px)', '122px', 46, ...hold('KeyH'));
@@ -15058,7 +15070,7 @@ addEventListener('keydown', e => {
   if (ch === 't' && state === 'play') spawnVehicle('tank');
   if (ch === 'y' && state === 'play') spawnVehicle('heli');
   if (e.code === 'KeyJ' && (state === 'play' || MISSION.menu) && !INTERIOR.active && !bigOpen) toggleMissionMenu(!MISSION.menu);
-  if (/^Digit[1-5]$/.test(e.code) && state === 'play' && !INTERIOR.active) selectWeapon(+e.code[5] - 1);
+  if (/^Digit[1-5]$/.test(e.code) && state === 'play' && !INTERIOR.active) { if (player.car && player.car.kind === 'heli') { if (+e.code[5] <= HELI_W.length) heliSelect(player.car, +e.code[5] - 1); } else selectWeapon(+e.code[5] - 1); }
   // E: shop doors, U-Bahn stairs, the till and train doors first, then cars
   // talking: 1-4 answer, E ends the conversation
   if (TALK.open && state === 'play') { if (/^Digit[1-4]$/.test(e.code)) chooseTalk(+e.code[5] - 1); if (e.code === 'KeyE') closeTalk(); return; }
@@ -15069,12 +15081,362 @@ addEventListener('keyup', e => { keys[e.code] = false; if (e.code === 'KeyF') mo
 // a click fires even when the browser has not given the mouse to the game (it asks for it again)
 canvas.addEventListener('mousedown', e => { if (state === 'play' && e.button === 0) { mouse.down = true; if (document.pointerLockElement !== canvas) try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (err) { /* mouse look needs pointer lock */ } } });
 addEventListener('mouseup', () => { mouse.down = false; });
-addEventListener('wheel', e => { if (state === 'play' && !bigOpen && !INTERIOR.active && e.deltaY) selectWeapon(player.weapon + Math.sign(e.deltaY)); });
+addEventListener('wheel', e => { if (state === 'play' && !bigOpen && !INTERIOR.active && e.deltaY) { if (player.car && player.car.kind === 'heli') heliSelect(player.car, (player.car.hw || 0) + Math.sign(e.deltaY)); else selectWeapon(player.weapon + Math.sign(e.deltaY)); } });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; mouse.down = false; });
 addEventListener('mousemove', e => {
   if (document.pointerLockElement !== canvas || state !== 'play') return;
   yaw += e.movementX * 0.0026; pitch = clamp(pitch + e.movementY * 0.0022, -0.35, 1.2); lastMouse = time;
 });
+// ================= added: sound that always works on phones, the city's ambience, the helicopter's three weapons
+// (rockets, a mega bomb, a mini nuke; all unlimited) and the riot night =================
+
+// ---------- sound ----------
+// phones keep audio asleep until a touch, and put it back to sleep when the app goes to the background: wake it on every touch
+function wakeAudio() {
+  initAudio();
+  if (ac && ac.state !== 'running') { try { const r = ac.resume(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* not allowed yet */ } }
+}
+for (const ev of ['pointerdown', 'touchend', 'keydown']) addEventListener(ev, wakeAudio, { capture: true, passive: true });
+document.addEventListener('visibilitychange', () => { if (!document.hidden && ac) wakeAudio(); });
+// the city: traffic rumble, a little wind, the roar of a crowd near riots; footsteps on foot
+const AMB = { built: false, scanT: 0, traffic: 0, crowd: 0, step: 0 };
+function buildAmbience() {
+  if (AMB.built || !ac) return;
+  AMB.built = true;
+  const loop = (type, f, q) => {
+    const s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; s.loop = true; s.playbackRate.value = 0.5 + R() * 0.5; fl.type = type; fl.frequency.value = f; fl.Q.value = q; g.gain.value = 0;
+    s.connect(fl); fl.connect(g); g.connect(master); s.start(); return g;
+  };
+  AMB.gTraffic = loop('lowpass', 260, 0.7);
+  AMB.gWind = loop('bandpass', 900, 0.4);
+  AMB.gCrowd = loop('bandpass', 650, 1.1);
+  // the crowd's roar swells and falls
+  const lfo = ac.createOscillator(), depth = ac.createGain(); lfo.frequency.value = 0.23; depth.gain.value = 0; lfo.connect(depth); depth.connect(AMB.gCrowd.gain); lfo.start(); AMB.crowdDepth = depth;
+}
+function updateAmbience(dt) {
+  if (!ac) return;
+  buildAmbience();
+  const on = state === 'play' && !muted && !INTERIOR.active, t = ac.currentTime;
+  if ((AMB.scanT -= dt) < 0) {
+    AMB.scanT = 0.3;
+    let n = 0; for (const c of cars) if (!c.hidden && Math.abs(c.x - player.x) < 70 && Math.abs(c.z - player.z) < 70) n += 0.4 + Math.min(1, Math.hypot(c.vx || 0, c.vz || 0) / 10);
+    AMB.traffic = clamp(n / 10, 0.15, 1);
+  }
+  const high = player.car && player.car.kind === 'heli' ? clamp((player.car.alt - (player.car.floor || 0)) / 60, 0, 1) : 0;
+  AMB.gTraffic.gain.setTargetAtTime(on ? 0.075 * AMB.traffic * (1 - high * 0.8) : 0, t, 0.4);
+  AMB.gWind.gain.setTargetAtTime(on ? 0.012 + high * 0.03 : 0, t, 0.5);
+  AMB.gCrowd.gain.setTargetAtTime(on ? 0.11 * AMB.crowd : 0, t, 0.5);
+  AMB.crowdDepth.gain.setTargetAtTime(on ? 0.05 * AMB.crowd : 0, t, 0.5);
+  // footsteps: one soft tap per step while walking or running
+  if (on && !player.car && !player.ride && !player.down) {
+    const s = Math.floor(player.phase / Math.PI);
+    if (s !== AMB.step) { AMB.step = s; const run = Math.abs(player.phase - (AMB.lastPh || 0)) > 0.25; noiseHit(run ? 0.07 : 0.045, run ? 900 : 650, 0.07); }
+    AMB.lastPh = player.phase;
+  }
+}
+
+// ---------- the helicopter's weapons: 1 rockets, 2 mega bomb, 3 mini nuke (GUN on the phone, 1-3 or the mouse wheel) ----------
+const HELI_W = [{ name: 'ROCKETS', rate: 0.32 }, { name: 'MEGA BOMB', rate: 1.1 }, { name: 'MINI NUKE', rate: 4.5 }];
+function heliSelect(c, i) {
+  c.hw = (i + HELI_W.length) % HELI_W.length;
+  player.shootT = Math.max(player.shootT, 0.2);
+  beep('square', 520 + c.hw * 140, 760 + c.hw * 140, 0.06, 0.05);
+  notice('', HELI_W[c.hw].name + (c.hw === 2 ? ': drop it far away and climb!' : c.hw === 1 ? ': drops where you aim' : ''), 1.6);
+}
+const HBOMBS = [], NUKES = [];
+const HB_MAT = {
+  bomb: new THREE.MeshStandardMaterial({ color: lin('#2e332c'), roughness: 0.5, metalness: 0.5 }),
+  nuke: new THREE.MeshStandardMaterial({ color: lin('#e3bb17'), roughness: 0.45, metalness: 0.3, emissive: lin('#2a1f00') }),
+  band: new THREE.MeshStandardMaterial({ color: lin('#141414'), roughness: 0.6 }),
+  chute: new THREE.MeshStandardMaterial({ color: lin('#e8e2d4'), roughness: 0.9, side: THREE.DoubleSide }),
+};
+function bombMesh(nuke) {
+  const g = new THREE.Group(), r = nuke ? 0.55 : 0.36, L = nuke ? 2.3 : 1.9, mat = nuke ? HB_MAT.nuke : HB_MAT.bomb;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 14).rotateX(Math.PI / 2), mat);
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(r, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).rotateX(Math.PI / 2), mat); nose.position.z = L / 2;
+  g.add(body, nose);
+  for (let k = 0; k < 4; k++) { const f = new THREE.Mesh(new THREE.BoxGeometry(0.04, r * 2.4, 0.6), HB_MAT.band); f.position.z = -L / 2; f.rotation.z = k * Math.PI / 4; g.add(f); }
+  if (nuke) {
+    for (const z of [-0.5, 0.5]) { const b = new THREE.Mesh(new THREE.CylinderGeometry(r + 0.02, r + 0.02, 0.18, 14).rotateX(Math.PI / 2), HB_MAT.band); b.position.z = z; g.add(b); }
+    const chute = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.2, 12, 1, true).rotateX(-Math.PI / 2), HB_MAT.chute); chute.position.z = -L / 2 - 2.4; g.add(chute);
+  }
+  g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  return g;
+}
+function heliDrop(c, nuke) {
+  player.shootT = HELI_W[nuke ? 2 : 1].rate;
+  const sx = c.x, sy = c.alt - 0.8, sz = c.z, aim = vehicleAim(c);
+  let tx = aim.x, ty = aim.y, tz = aim.z;
+  // aimed at the sky or above the helicopter: it falls ahead of it
+  if (ty > sy - 2) { tx = sx + Math.cos(c.a) * 20 + c.vx * 1.5; tz = sz + Math.sin(c.a) * 20 + c.vz * 1.5; ty = groundY(tx, tz); }
+  const drop = Math.max(3, sy - ty), T = clamp(Math.sqrt(2 * drop / 9.81) * (nuke ? 1.7 : 1.05), 0.7, 7);
+  const m = bombMesh(nuke); m.position.set(sx, sy, sz); scene.add(m);
+  HBOMBS.push({ m, x0: sx, y0: sy, z0: sz, tx, ty, tz, T, t: 0, nuke });
+  noiseHit(0.3, 600, 0.25); beep('sine', 1500, 420, Math.min(T, 4), 0.045);
+  addHeat(nuke ? 60 : 20);
+}
+function updateHeliBombs(dt) {
+  for (let i = HBOMBS.length - 1; i >= 0; i--) {
+    const b = HBOMBS[i]; b.t += dt;
+    const t = Math.min(b.t, b.T), k = t / b.T, ge = 2 * (b.y0 - b.ty) / (b.T * b.T);
+    const x = b.x0 + (b.tx - b.x0) * k, z = b.z0 + (b.tz - b.z0) * k, y = b.y0 - 0.5 * ge * t * t;
+    b.m.position.set(x, y, z);
+    b.m.lookAt(x + (b.tx - b.x0) / b.T, y - ge * t - 0.01, z + (b.tz - b.z0) / b.T);
+    if (R() < 0.5) PFX.smoke(x, y + 0.6, z, 0, 0.3, 0, 1.2, 0.5, 0.25, 0.4);
+    const inHouse = b.t > 0.2 && y < heightAt(x, z) - 0.3;
+    if (k >= 1 || inHouse) {
+      scene.remove(b.m); HBOMBS.splice(i, 1);
+      const gy = Math.max(y, groundY(x, z) + 0.5);
+      if (b.nuke) nukeAt(x, gy, z); else megaBlast(x, gy, z);
+    }
+  }
+  updateNukes(dt);
+}
+// the mega bomb: one huge blast and a ring of blasts round it
+function megaBlast(x, y, z) {
+  rocketBlast(x, y, z, null, null, 5);
+  shake = Math.max(shake, 1.7 * Math.max(0.35, glassVol(x, z)));
+  for (let k = 0; k < 6; k++) {
+    const a = k / 6 * 6.283 + R() * 0.4, r = 8 + R() * 6;
+    setTimeout(() => { const bx = x + Math.cos(a) * r, bz = z + Math.sin(a) * r; rocketBlast(bx, groundY(bx, bz) + 0.6, bz, null, null, 1.6); }, 140 + k * 120);
+  }
+}
+// the mini nuke: a white flash, a fireball, a shock wave racing out 150 m (windows, people, cars, houses), a mushroom cloud
+const NUKE_R = 150;
+let nukeFlash = null;
+function nukeAt(x, y, z) {
+  if (!nukeFlash) { nukeFlash = document.createElement('div'); nukeFlash.style.cssText = 'position:fixed;inset:0;background:#fff8e6;pointer-events:none;z-index:30;opacity:0'; document.body.appendChild(nukeFlash); }
+  const N = { x, z, y: groundY(x, z), t: 0, hi: 0, collapsed: 0, lit: 0, glass: false, pHit: false, houses: [], id: Symbol('nuke') };
+  for (const h of housesNear(x - NUKE_R, z - NUKE_R, x + NUKE_R, z + NUKE_R)) if (h.state === 'ok') { const d = boxDist(h, x, z); if (d < NUKE_R) N.houses.push({ h, d }); }
+  N.houses.sort((a, b) => a.d - b.d);
+  // the cloud: a glowing stem, a cap and a ring round it; it rises, cools from white to orange to grey, then drifts away
+  const mk = (geo, col) => new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 1, depthWrite: false }));
+  const g = new THREE.Group();
+  N.stem = mk(new THREE.CylinderGeometry(0.45, 1, 1, 18, 1, true), lin('#fff2c2'));
+  N.cap = mk(new THREE.SphereGeometry(1, 22, 14), lin('#fff2c2'));
+  N.ring = mk(new THREE.TorusGeometry(1, 0.32, 10, 28).rotateX(Math.PI / 2), lin('#ffd27a'));
+  N.ball = mk(new THREE.SphereGeometry(1, 22, 14), lin('#ffffff'));
+  N.wave = mk(new THREE.RingGeometry(0.92, 1, 64).rotateX(-Math.PI / 2), lin('#fff6dc'));
+  g.add(N.stem, N.cap, N.ring, N.ball, N.wave); g.position.set(x, N.y, z); scene.add(g); N.g = g;
+  rocketBlast(x, y, z, null, null, 8);
+  for (let k = 0; k < 6; k++) { const a = R() * 6.283, r = 3 + R() * 10; riot.fires.push({ x: x + Math.cos(a) * r, z: z + Math.sin(a) * r, r: 2.2 + R() * 1.5, t: 35 + R() * 20, big: true }); }
+  fireMarks.scorch.add(null, groundMatrix(x, z, R() * 6, 34, 34));
+  // the sound: a crack, a deep thump, the long rumble rolling in after it
+  noiseHit(1, 180, 2.8); beep('sine', 75, 18, 5, 0.55); sfx.boom();
+  setTimeout(() => { noiseHit(0.9, 95, 7); sfx.boom(); }, 450); setTimeout(() => noiseHit(0.6, 70, 6), 1400);
+  shake = Math.max(shake, 2.2);
+  addHeat(400);
+  notice('MINI NUKE', '', 2.5);
+  NUKES.push(N);
+}
+function updateNukes(dt) {
+  for (let i = NUKES.length - 1; i >= 0; i--) {
+    const N = NUKES[i]; N.t += dt;
+    const t = N.t, R_ = NUKE_R * Math.min(1, Math.pow(t / 2.4, 0.8)), pd = dist(player.x, player.z, N.x, N.z);
+    // the flash, brightest close by
+    nukeFlash.style.opacity = t < 1.6 ? (Math.max(0, 1 - t / 1.6) * clamp(1.2 - pd / 700, 0.35, 1)).toFixed(3) : '0';
+    // the shock wave: houses, glass, people, cars as it reaches them
+    while (N.hi < N.houses.length && N.houses[N.hi].d <= R_) {
+      const { h, d } = N.houses[N.hi++];
+      if (h.state !== 'ok') continue;
+      if (d < 30 && N.collapsed < 8) { N.collapsed++; damageHouse(h, 1e6, true); continue; }
+      if (d < 80) {
+        if (h.hp > 1) damageHouse(h, Math.min(h.hp * 0.45, 40 + R() * 20), true);
+        if (N.lit < 9 && R() < 0.5 && igniteClosest(h, N.x, 4 + R() * 6, N.z, 1e9)) N.lit++;
+      }
+      const p = d < 80 ? 1 : 0.75 * (1 - d / NUKE_R) + 0.15;
+      for (const w of h.panes) if (!w.broken && !w.gone && R() < p) breakGlass(w, true);
+    }
+    if (!N.glass && R_ > 25) { N.glass = true; sfx.glass(1); }
+    for (const p of peds) {
+      if (p.dead || p.nuked === N.id) continue;
+      const d = dist(p.x, p.z, N.x, N.z); if (d > R_ || d > 120) continue;
+      p.nuked = N.id;
+      if (p.npc || (p.role !== 'walker' && p.role !== 'idle')) p.downed = 5 + R() * 5; else killPed(p, 'player');
+    }
+    for (const c of cars) {
+      if (c.nuked === N.id || c.hidden) continue;
+      const dx = c.x - N.x, dz = c.z - N.z, d = Math.hypot(dx, dz) || 1; if (d > R_ || d > 135) continue;
+      c.nuked = N.id; const f = 1 - d / 135;
+      if (c === player.car) { c.vx += dx / d * 14 * f; c.vz += dz / d * 14 * f; continue; }
+      c.hp -= 280 * f; c.lastHit = 'player'; if (c.mode === 'lane') c.mode = 'phys'; c.vx += dx / d * 26 * f; c.vz += dz / d * 26 * f;
+    }
+    if (!N.pHit && pd < R_) { N.pHit = true; shake = Math.max(shake, 1.6 * clamp(1.3 - pd / 200, 0.3, 1)); if (!player.car && !player.down && pd < 110) hurtPlayer(230 * (1 - pd / 110)); }
+    if (t < 2.8) for (let k = 0; k < 7; k++) { const a = R() * 6.283; PFX.dust(N.x + Math.cos(a) * R_, N.y + 0.5, N.z + Math.sin(a) * R_, Math.cos(a) * 9, 1 + R() * 2, Math.sin(a) * 9, 3 + R() * 2, 3 + R() * 2); }
+    N.wave.scale.setScalar(Math.max(0.1, R_)); N.wave.position.y = 0.6; N.wave.material.opacity = Math.max(0, 0.7 * (1 - t / 2.8)); N.wave.visible = t < 2.8;
+    // the fireball, then the cloud
+    const bs = 6 + Math.min(1, t / 1.2) * 22; N.ball.scale.setScalar(bs); N.ball.position.y = bs * 0.5 + t * 3; N.ball.material.opacity = Math.max(0, 1 - t / 3.5); N.ball.visible = t < 3.5;
+    const rise = 1 - Math.pow(1 - Math.min(1, t / 10), 2.4), H = 12 + rise * 95, cr = 10 + rise * 36;
+    N.stem.scale.set(5 + rise * 9, H, 5 + rise * 9); N.stem.position.y = H / 2;
+    N.cap.scale.set(cr, cr * 0.58, cr); N.cap.position.y = H + cr * 0.15;
+    N.ring.scale.set(cr * 0.9, cr * 0.9, cr * 0.9); N.ring.position.y = H - cr * 0.12;
+    const hot = clamp(1 - t / 7, 0, 1), cool = clamp((t - 2) / 10, 0, 1), fade = clamp(1 - (t - 22) / 12, 0, 1);
+    for (const [m, glow] of [[N.stem, 0.8], [N.cap, 1], [N.ring, 0.9]]) {
+      m.material.color.setRGB(0.45 + 0.55 * hot * glow, 0.36 + 0.5 * hot * glow * (1 - cool * 0.5), 0.3 + 0.35 * Math.max(0, hot - 0.4));
+      m.material.opacity = fade * (m === N.stem ? 0.85 : 0.95);
+    }
+    N.g.position.x = N.x + Math.max(0, t - 12) * 0.8;
+    if (t < 16 && R() < 0.6) { const a = R() * 6.283; PFX.smoke(N.g.position.x + Math.cos(a) * cr * 0.8, N.y + H + (R() - 0.3) * cr * 0.4, N.z + Math.sin(a) * cr * 0.8, Math.cos(a) * 2, 1 + R(), Math.sin(a) * 2, 9 + R() * 6, 10 + R() * 8, 0.35, 1.2); }
+    if (t > 34) { scene.remove(N.g); N.g.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } }); NUKES.splice(i, 1); }
+  }
+}
+
+// ---------- the riot night: riots on every street round the player (a mission turns it on) ----------
+// Each riot is a knot of masked rioters facing a line of riot police across the street, a burning barricade between them,
+// stones and Molotovs flying, fist fights, a police van behind the line, and houses set alight. Riots are made out of sight
+// (or further than 140 m) within 200 m of the player and cleared when he has left them far behind, so the whole city burns.
+const RIOTS = { on: false, hot: [], scanT: 0, flights: [], talkT: 0, startT: 0 };
+const RIOT_MAX = 9;
+function riotsOn(on) {
+  RIOTS.on = on; RIOTS.startT = time;
+  if (!on) { for (const H of RIOTS.hot) dropRiot(H); RIOTS.hot.length = 0; AMB.crowd = 0; }
+}
+function dropRiot(H) {
+  for (const p of H.peds) p.gone = true;
+  for (const f of H.fires) f.t = Math.min(f.t, 6 + R() * 8);
+  if (H.van) scene.remove(H.van.g);
+}
+function riotSpot(x, z) { return inArea(x, z, -10) && !solid(x, z) && heightAt(x, z) < 1; }
+function makeRiot() {
+  // the streets round the player (looked up again when he has moved on)
+  if (!RIOTS.segs || dist(RIOTS.segX, RIOTS.segZ, player.x, player.z) > 40) {
+    RIOTS.segX = player.x; RIOTS.segZ = player.z;
+    RIOTS.segs = STREET_SEGS.filter(s => Math.min(Math.abs(s[0] - player.x), Math.abs(s[2] - player.x)) < 230 && Math.min(Math.abs(s[1] - player.z), Math.abs(s[3] - player.z)) < 230 && Math.hypot(s[2] - s[0], s[3] - s[1]) >= 14);
+  }
+  if (!RIOTS.segs.length) return null;
+  for (let tries = 0; tries < 30; tries++) {
+    const s = pick(RIOTS.segs), L = Math.hypot(s[2] - s[0], s[3] - s[1]);
+    const u = 0.3 + R() * 0.4, cx = s[0] + (s[2] - s[0]) * u, cz = s[1] + (s[3] - s[1]) * u, d = dist(cx, cz, player.x, player.z);
+    if (d < 25 || d > 200 || !riotSpot(cx, cz)) continue;
+    if (time - RIOTS.startT > 2.5 && seen(cx, cz) && d < 140) continue;
+    if (RIOTS.hot.some(H => dist(H.x, H.z, cx, cz) < 45)) continue;
+    let fx = (s[2] - s[0]) / L, fz = (s[3] - s[1]) / L; if (R() < 0.5) { fx = -fx; fz = -fz; }
+    const nx = -fz, nz = fx, H = { x: cx, z: cz, fx, fz, nx, nz, peds: [], cops: [], rioters: [], fires: [], throwT: 1 + R() * 2, fightT: 3 + R() * 4, burnT: 2 + R() * 6, fight: null };
+    const P = (a, b) => [cx + fx * a + nx * b, cz + fz * a + nz * b];
+    const faceCops = Math.atan2(fz, fx), faceRioters = Math.atan2(-fz, -fx);
+    // the police line with shields
+    for (const b of [-2.4, -0.8, 0.8, 2.4]) {
+      const [x, z] = P(7, b); if (!riotSpot(x, z)) continue;
+      const p = addPed(x, z, 'idle', randomLook('riotcop'));
+      Object.assign(p, { npc: true, riot: H, a: faceRioters, pose: 'shield', hx: x, hz: z, ha: faceRioters, onRoad: true, cop: true });
+      H.peds.push(p); H.cops.push(p);
+    }
+    if (H.cops.length < 2) { for (const p of H.peds) p.gone = true; continue; }
+    // the rioters, masked and in black; some with placards
+    for (let k = 0; k < 7; k++) {
+      const [x, z] = P(-3 - R() * 9, (R() - 0.5) * 7); if (!riotSpot(x, z)) continue;
+      const p = addPed(x, z, 'idle', randomLook('rioter'));
+      Object.assign(p, { npc: true, riot: H, a: faceCops + (R() - 0.5) * 0.6, pose: R() < 0.15 ? 'sign' : null, hx: x, hz: z, ha: faceCops, onRoad: true, wobT: R() * 3 });
+      H.peds.push(p); H.rioters.push(p);
+    }
+    // the burning barricade between them
+    for (const b of [-2, 1.5]) { const [x, z] = P(2, b); if (!riotSpot(x, z)) continue; const f = { x, z, r: 1.4 + R() * 0.5, t: 600, big: true }; riot.fires.push(f); H.fires.push(f); }
+    // a police van behind the line
+    const [vx, vz] = P(13, (R() - 0.5) * 2);
+    if (riotSpot(vx, vz)) { const m = buildCar('police', 'police'); m.g.position.set(vx, groundY(vx, vz), vz); m.g.rotation.y = -(faceRioters + (R() - 0.5) * 0.5); scene.add(m.g); H.van = m; }
+    RIOTS.hot.push(H);
+    return H;
+  }
+  return null;
+}
+// something flies from a rioter: a stone, or a Molotov (at the police, or at a window to set the house alight)
+function riotThrow(H, p, tx, ty, tz, molotov, pane) {
+  p.pose = 'throw'; p.poseT = 0; p.a = Math.atan2(tz - p.z, tx - p.x);
+  const m = new THREE.Mesh(molotov ? bottleGeo : new THREE.DodecahedronGeometry(0.08), molotov ? HB_MAT.bottle || (HB_MAT.bottle = new THREE.MeshStandardMaterial({ color: lin('#2f6b3b'), roughness: 0.6 })) : HB_MAT.stone || (HB_MAT.stone = new THREE.MeshStandardMaterial({ color: lin('#77736c'), roughness: 0.8 })));
+  m.visible = false; scene.add(m);
+  RIOTS.flights.push({ m, x0: p.x, z0: p.z, y0: groundY(p.x, p.z) + 1.9, tx, ty, tz, t: -0.3, T: 0.9 + R() * 0.4, molotov, pane, H });
+}
+function updateRiots(dt) {
+  // the flights
+  for (let i = RIOTS.flights.length - 1; i >= 0; i--) {
+    const f = RIOTS.flights[i]; f.t += dt;
+    if (f.t < 0) continue;
+    f.m.visible = true;
+    const k = Math.min(1, f.t / f.T), x = f.x0 + (f.tx - f.x0) * k, z = f.z0 + (f.tz - f.z0) * k, y = f.y0 + (f.ty - f.y0) * k + Math.sin(k * Math.PI) * 4.5;
+    f.m.position.set(x, y, z); f.m.rotation.set(f.t * 9, f.t * 6, 0);
+    if (f.molotov && R() < 0.7) PFX.flame(x, y + 0.15, z, 0, 0.5, 0, 0.2, 0.25);
+    if (k < 1) continue;
+    scene.remove(f.m); RIOTS.flights.splice(i, 1);
+    const near = dist(player.x, player.z, x, z) < 60;
+    if (f.pane) { if (f.pane.h.state === 'ok' && igniteHouse(f.pane.h, f.pane.w) && near) beep('sawtooth', 300, 80, 0.25, 0.05); }
+    else if (f.molotov) { const fire = { x, z, r: 1.3, t: 5 + R() * 4 }; riot.fires.push(fire); if (near) beep('sawtooth', 300, 80, 0.25, 0.05); }
+    else { for (let q = 0; q < 4; q++) puff(x, groundY(x, z) + 0.3, z, (R() - 0.5) * 2, 1 + R(), (R() - 0.5) * 2, 0.5, 0.3, '#bdb5a6', 0.6); if (near) noiseHit(0.08, 2000, 0.06); }
+    // a cop hit hard enough goes down for a while
+    if (f.H && !f.pane) for (const c of f.H.cops) if (!c.dead && dist(c.x, c.z, x, z) < 1.3 && R() < (f.molotov ? 0.5 : 0.1)) c.downed = 3 + R() * 4;
+  }
+  if (!RIOTS.on || INTERIOR.active) { AMB.crowd = Math.max(0, AMB.crowd - dt * 0.3); return; }
+  // keep riots going on the streets all round, clear the ones far behind
+  if ((RIOTS.scanT -= dt) < 0) {
+    RIOTS.scanT = time - RIOTS.startT < 3 ? 0.05 : 0.8;
+    for (let i = RIOTS.hot.length - 1; i >= 0; i--) { const H = RIOTS.hot[i], d = dist(H.x, H.z, player.x, player.z); if (d > 300 || (d > 230 && !seen(H.x, H.z))) { dropRiot(H); RIOTS.hot.splice(i, 1); } }
+    if (RIOTS.hot.length < (quality === 'low' ? RIOT_MAX - 3 : RIOT_MAX)) makeRiot();
+  }
+  let nearest = 1e9;
+  for (const H of RIOTS.hot) {
+    const dH = dist(H.x, H.z, player.x, player.z); nearest = Math.min(nearest, dH);
+    const live = H.peds.filter(p => !p.dead);
+    // the people: knocked-down get up again, everyone sways about and turns to face the other side
+    for (const p of live) {
+      if (p.downed > 0) { p.downed -= dt; p.moving = false; continue; }
+      if (p.burn > 0) continue;
+      if (p.pose === 'throw') { p.poseT += dt; if (p.poseT > 0.9) { p.pose = null; p.a = p.ha; } }
+      if (p.fightWith) continue;
+      if (!p.cop && (p.wobT -= dt) < 0) { p.wobT = 1.5 + R() * 3; p.wx = p.hx + (R() - 0.5) * 1.6; p.wz = p.hz + (R() - 0.5) * 1.6; }
+      const tx = p.cop ? p.hx : p.wx != null ? p.wx : p.hx, tz = p.cop ? p.hz : p.wz != null ? p.wz : p.hz, dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
+      if (d > 0.15) { const st = Math.min(d, 1.4 * dt); p.x += dx / d * st; p.z += dz / d * st; p.moving = true; p.phase += dt * 6; }
+      else { p.moving = false; if (p.pose !== 'throw') p.a += angDiff(p.ha, p.a) * Math.min(1, dt * 4); }
+      p.y = groundY(p.x, p.z);
+    }
+    if (dH > 260) continue;
+    const rio = H.rioters.filter(p => !p.dead && !(p.downed > 0) && !p.fightWith && !(p.burn > 0)), cops = H.cops.filter(p => !p.dead && !(p.downed > 0) && !p.fightWith);
+    // stones and Molotovs at the police line
+    if ((H.throwT -= dt) < 0 && rio.length && cops.length) {
+      H.throwT = 0.6 + R() * 1.5;
+      const p = pick(rio), c = pick(cops);
+      riotThrow(H, p, c.x + (R() - 0.5) * 2, groundY(c.x, c.z) + 0.4, c.z + (R() - 0.5) * 2, R() < 0.35);
+    }
+    // a Molotov through a window: the houses along the street go up one after another
+    if ((H.burnT -= dt) < 0 && rio.length) {
+      H.burnT = 9 + R() * 9;
+      if (burningHouses.size < 16) {
+        const p = pick(rio); let best = null, bd = 22;
+        for (const h of housesNear(p.x - 22, p.z - 22, p.x + 22, p.z + 22)) {
+          if (h.state !== 'ok' || h.H < 5) continue;
+          for (const w of h.panes) { if (w.burnT > 0 || w.burnt || w.gone || w.y > 9) continue; const d = Math.hypot(w.x - p.x, w.z - p.z) + R() * 4; if (d < bd) { bd = d; best = { h, w }; } }
+        }
+        if (best) riotThrow(H, p, best.w.x, best.w.y, best.w.z, true, best);
+      }
+    }
+    // a fight: a rioter runs at a cop, fists against the baton, then one of them goes down
+    if (H.fight) {
+      const F = H.fight, a = F.a, b = F.b; F.t += dt;
+      if (a.dead || b.dead || a.downed > 0 || b.downed > 0 || F.t > 9) { endFight(H); }
+      else {
+        const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
+        if (d > 0.85 && !F.on) { const st = Math.min(d - 0.8, 4.2 * dt); a.x += dx / d * st; a.z += dz / d * st; a.a = Math.atan2(dz, dx); a.moving = true; a.phase += dt * 14; a.y = groundY(a.x, a.z); }
+        else {
+          if (!F.on) { F.on = true; F.T = F.t + 2 + R() * 3; }
+          a.moving = false; a.pose = 'punch'; b.pose = 'baton'; a.a = Math.atan2(dz, dx); b.a = Math.atan2(-dz, -dx);
+          if (dH < 50 && R() < dt * 4) noiseHit(0.06, 1200, 0.05);
+          if (F.t > F.T) { (R() < 0.6 ? a : b).downed = 3 + R() * 5; endFight(H); }
+        }
+      }
+    } else if ((H.fightT -= dt) < 0 && rio.length && cops.length) {
+      H.fightT = 4 + R() * 6;
+      const a = pick(rio), b = cops.reduce((m, c) => dist(c.x, c.z, a.x, a.z) < dist(m.x, m.z, a.x, a.z) ? c : m);
+      a.fightWith = b; b.fightWith = a; H.fight = { a, b, t: 0, on: false };
+    }
+    // the chants, when the player is close
+    if (dH < 30 && !TALK.open && (RIOTS.talkT -= dt) < 0) { RIOTS.talkT = 6 + R() * 6; const [de, en] = pick(RIOT_LINES.concat([['Bullen raus!', 'Cops out!'], ['Die ganze Stadt brennt!', 'The whole city is burning!']])); talk('<b>' + de + '</b><br><small>' + en + '</small>', 2.8); }
+  }
+  AMB.crowd = clamp(1.15 - nearest / 110, 0, 1);
+}
+function endFight(H) {
+  const F = H.fight; H.fight = null;
+  for (const p of [F.a, F.b]) { p.fightWith = null; p.pose = p.cop ? 'shield' : null; p.a = p.ha; }
+}
+
 function start() {
   initAudio();
   try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* mouse look needs pointer lock */ }
@@ -15123,7 +15485,7 @@ function step(dt, real) {
   if (state === 'play') updatePlayer(dt);
   // holding B keeps building barricades as you go (one every 0.7 s)
   if (state === 'play' && keys.KeyB && time - buildT > 0.7) buildBarricade(true);
-  updateTalk(dt); updateHavoc(dt); updateInvasion(dt); updateCyclists(dt); updateEdge(); updateRiver(dt); updateFallen(dt); U1.update(dt); updateBrigade(dt); updateBuilt(dt); updatePixelhafen(); updateRingCenter(); updateScenes(dt); updateContact(); updateCars(dt); updateBridges(dt); updateTrams(dt); updateTrains(dt); updatePeds(dt); updateSpots(); updateParked(real); updateSignals(); updateEffects(dt);
+  updateTalk(dt); updateHavoc(dt); updateInvasion(dt); updateCyclists(dt); updateEdge(); updateRiver(dt); updateFallen(dt); U1.update(dt); updateBrigade(dt); updateBuilt(dt); updatePixelhafen(); updateRingCenter(); updateScenes(dt); updateRiots(dt); updateHeliBombs(dt); updateAmbience(dt); updateContact(); updateCars(dt); updateBridges(dt); updateTrams(dt); updateTrains(dt); updatePeds(dt); updateSpots(); updateParked(real); updateSignals(); updateEffects(dt);
 }
 // one frame; the loop keeps running even if something in a frame goes wrong (an error used to stop the whole game)
 let frameErrors = 0;

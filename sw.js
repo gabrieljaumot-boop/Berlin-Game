@@ -2,7 +2,7 @@
 // and plays without a connection. Change VERSION with every update; a phone then fetches the new game once.
 // Robust install: each file is cached on its own, so one failed download (a CDN hiccup on mobile data) no longer stops the
 // install; anything missing is cached the first time the game asks for it.
-const VERSION = 'fa-20261030172500';
+const VERSION = 'fa-20261030191830';
 const CORE = ['./index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 const CDN = [
   'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
